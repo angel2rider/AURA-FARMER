@@ -1,0 +1,32 @@
+{
+  "name": "aura-farmer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Discord music submission queue for Aura Music",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "tsx watch src/gateway/index.ts",
+    "start": "node dist/gateway.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p worker/tsconfig.json --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "worker:dev": "cd worker && wrangler dev",
+    "worker:deploy": "cd worker && wrangler deploy",
+    "db:migrate:local": "cd worker && wrangler d1 migrations apply aura-farmer --local",
+    "db:migrate:remote": "cd worker && wrangler d1 migrations apply aura-farmer --remote"
+  },
+  "dependencies": {
+    "discord.js": "^14.28.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261103.1",
+    "@types/node": "^24.10.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.157.0"
+  }
+}

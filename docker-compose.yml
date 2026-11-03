@@ -1,0 +1,19 @@
+services:
+  aura-farmer:
+    build: .
+    image: aura-farmer:latest
+    container_name: aura-farmer
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:9099:9099"
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,23 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "aura-farmer",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "78b14a211589525aa3b866632a83d155",
+  "observability": { "enabled": true },
+  "triggers": {
+    "crons": ["*/2 * * * *"]
+  },
+  "vars": {
+    "AURA_API_URL": "https://aura-music-01g.pages.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "aura-farmer",
+      "database_id": "a20e1da8-df88-4ef1-9cfa-1ec600840c90",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
