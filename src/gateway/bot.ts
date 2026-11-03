@@ -240,8 +240,9 @@ export class AuraBot {
     }, 30_000);
     this.presenceTimer = setInterval(() => {
       void this.updatePresence();
-    }, 120_000);
+    }, 30_000);
     void this.sendHeartbeat();
+    void this.updatePresence();
   }
 
   private async refreshConfig(initial: boolean): Promise<void> {
@@ -428,6 +429,8 @@ export class AuraBot {
     try {
       const response = await this.api.submit(payload);
       await this.react(message, resultEmoji(response.results));
+      this.cfg.queueCount = response.queueCount;
+      void this.updatePresence();
       const queued = response.results.filter((result) => result.status === 'queued').length;
       if (queued === 0 && response.message) {
         await this.reply(message, response.message);
@@ -535,6 +538,8 @@ export class AuraBot {
       }
     }
 
+    this.cfg.queueCount = lastCount;
+    void this.updatePresence();
     await this.react(message, queued ? REACTIONS.queued : REACTIONS.duplicate);
     await this.reply(
       message,
@@ -709,6 +714,8 @@ export class AuraBot {
         }),
       });
       const queued = response.results.filter((result) => result.status === 'queued').length;
+      this.cfg.queueCount = response.queueCount;
+      void this.updatePresence();
       await interaction.editReply({
         content: `Queued **${queued}/${picked.length}** · queue **${response.queueCount}/${response.threshold}**${summarizeResults(response.results) ? ` (${summarizeResults(response.results)})` : ''}.`,
       });
