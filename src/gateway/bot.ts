@@ -384,14 +384,10 @@ export class AuraBot {
     }
 
     const text = message.content || '';
-    const query = text.trim().startsWith('?') ? text.trim().slice(1).trim() : '';
     const videos = extractVideoIds(text);
     const playlists = extractPlaylistUrls(text);
 
     if (!videos.length && !playlists.length) {
-      if (query.length >= 2 && this.cfg.searchEnabled) {
-        await this.searchInChannel(message, query);
-      }
       return;
     }
 
@@ -647,7 +643,7 @@ export class AuraBot {
     }
     if (!(await this.requireCommandChannel(interaction))) return;
     const query = interaction.options.getString('query', true).trim();
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const { results } = await this.api.search(query);
       if (!results.length) {
@@ -686,7 +682,7 @@ export class AuraBot {
       await interaction.reply({ content: 'Those results expired — run `/find` again.', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const response = await this.api.submit({
         guildId: interaction.guildId || undefined,
@@ -738,7 +734,7 @@ export class AuraBot {
       });
       return;
     }
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     let expanded: ExpandResult;
     try {
       expanded = await this.api.expand(url);
@@ -794,7 +790,7 @@ export class AuraBot {
   }
 
   private async onQueueCommand(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const data = await this.api.queue(10);
       const embed = new EmbedBuilder()
@@ -856,7 +852,6 @@ export class AuraBot {
         { name: '/playlist url', value: 'Queue a whole playlist (up to 100 tracks).' },
         { name: '/queue', value: 'See what is waiting for the next batch.' },
         { name: '/status', value: 'Check whether the bot is online.' },
-        { name: '?query', value: 'Type a message starting with `?` to search from the channel.' },
       )
       .setFooter({ text: `Threshold: ${this.cfg.threshold} tracks · batches up to 25` });
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
