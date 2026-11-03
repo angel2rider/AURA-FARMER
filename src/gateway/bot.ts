@@ -33,20 +33,78 @@ type SearchCacheEntry = {
 const SEARCH_TTL_MS = 5 * 60_000;
 const MAX_PLAYLIST_TRACKS = 100;
 
-const REACTIONS = {
-  queued: '✅',
-  duplicate: '♻️',
-  banned: '⛔',
-  blocked: '⏳',
-  invalid: '❌',
-  offline: '🕓',
+const FARM_REACTIONS = {
+  queued: '🌱',      // planted
+  duplicate: '🌿',   // already growing
+  banned: '🚫',      // kicked off the farm
+  blocked: '⏳',     // wait for harvest
+  invalid: '🪨',     // that's a rock, not a seed
+  offline: '🌧️',     // storm knocked out the silo
+  playlist: '🚜',    // tractor loaded
+  search: '🔍',      // scouting
+} as const;
+
+const FARM_MESSAGES = {
+  queued: [
+    '🌱 Planted! Your crop\'s in the queue.',
+    '🌱 Seed saved. The harvest comes at {threshold}.',
+    '🌱 Tucked into the soil. Waiting on {queued} more.',
+  ],
+  duplicate: [
+    '🌿 Already growing that one — no double planting.',
+    '🌿 That crop\'s already in the field.',
+  ],
+  banned: [
+    '🚫 You\'ve been chased off the farm.',
+    '🚫 No trespassing — the scarecrow saw you.',
+  ],
+  blocked: [
+    '⏳ Soil needs rest. Try again in a bit.',
+    '⏳ The well\'s dry. Wait for the cooldown.',
+  ],
+  invalid: [
+    '🪨 That\'s a rock, not a seed. YouTube links only.',
+    '🪨 Can\'t plant that. Needs a valid YouTube link.',
+  ],
+  offline: [
+    '🌧️ Storm took the silo offline. Holding your seeds safe.',
+    '🌧️ Silo\'s down. Your batch is stored in the barn.',
+  ],
+  playlist: [
+    '🚜 Tractor loaded with {count} crops from that playlist.',
+    '🚜 Harvested {count} tracks from the playlist.',
+  ],
+  thresholdHit: [
+    '🌾 **{queued} planted** — **{count}/{threshold}** Silo full! Harvest beginning...',
+    '🌾 **{queued} seeds sown** — **{count}/{threshold}** The combine\'s rolling out!',
+  ],
+  queuedSimple: [
+    '🌱 **{queued} planted** — **{count}/{threshold}** in the silo.',
+    '🌱 **{queued} saved** — **{count}/{threshold}** waiting for harvest.',
+  ],
+  playlistQueued: [
+    '🚜 **{title}** — **{queued} crops** harvested{duplicates}. Silo: **{count}/{threshold}**.',
+  ],
+  searchPrompt: '🔍 Scouting the fields for **{query}** — pick your seeds:',
+  searchEmpty: '🔍 Nothin\' growin\' for **{query}**. Try another search.',
+  help: [
+    '🌾 **AURA FARMER** — We grow the beats so you don\'t have to.',
+    '',
+    '🌱 **Plant a seed:** Drop a YouTube/YouTube Music link in the channel.',
+    '🚜 **Harvest a field:** `/playlist <url>` — up to 100 tracks.',
+    '🔍 **Scout the fields:** `/find <query>` — search & pick.',
+    '📦 **Check the silo:** `/queue` — what\'s waiting.',
+    '📊 **Farm report:** `/status` — how\'s the harvest.',
+    '',
+    '⚙️ Silo threshold: **{threshold}** | Combine capacity: **25**',
+  ].join('\n'),
 } as const;
 
 function defaultConfig(): BotConfig {
   return {
     enabled: false,
     maintenance: false,
-    maintenanceMessage: 'Aura Farmer is taking a short break.',
+    maintenanceMessage: 'The farm\'s closed for maintenance. Scarecrow\'s on break.',
     threshold: 20,
     queueCount: 0,
     guildId: '',
@@ -56,7 +114,7 @@ function defaultConfig(): BotConfig {
     playlistExpand: true,
     cooldownSeconds: 0,
     dailyLimit: 0,
-    botName: 'Aura Farmer',
+    botName: 'AURA FARMER',
   };
 }
 
@@ -66,11 +124,11 @@ function isTextChannel(channel: unknown): channel is TextBasedChannel & { send: 
 
 function resultEmoji(results: SubmitItemResult[]): string {
   const statuses = new Set(results.map((result) => result.status));
-  if (statuses.has('banned')) return REACTIONS.banned;
-  if (statuses.has('cooldown') || statuses.has('limit')) return REACTIONS.blocked;
-  if (statuses.has('queued')) return REACTIONS.queued;
-  if (statuses.has('duplicate')) return REACTIONS.duplicate;
-  return REACTIONS.invalid;
+  if (statuses.has('banned')) return FARM_REACTIONS.banned;
+  if (statuses.has('cooldown') || statuses.has('limit')) return FARM_REACTIONS.blocked;
+  if (statuses.has('queued')) return FARM_REACTIONS.queued;
+  if (statuses.has('duplicate')) return FARM_REACTIONS.duplicate;
+  return FARM_REACTIONS.invalid;
 }
 
 function summarizeResults(results: SubmitItemResult[]): string {
@@ -281,7 +339,7 @@ export class AuraBot {
       this.client.user?.setPresence({
         activities: [
           {
-            name: `${this.cfg.queueCount}/${this.cfg.threshold} queued · /help`,
+            name: `🌱 ${this.cfg.queueCount}/${this.cfg.threshold} in the silo · /help`,
             type: ActivityType.Watching,
           },
         ],
@@ -335,28 +393,28 @@ export class AuraBot {
     if (event.action === 'batch.dispatched') {
       embed = new EmbedBuilder()
         .setColor(COLORS.gold)
-        .setTitle(`Batch #${details.batchId ?? '?'} handed to the downloader`)
+        .setTitle(`🚜 Harvest #${details.batchId ?? '?'} — Combine rolling out!`)
         .setDescription(
-          `${details.dispatched ?? details.count ?? 0} track(s) sent to Aura's upload workflow.`,
+          `**${details.dispatched ?? details.count ?? 0} crops** sent to the Aura silo.`,
         )
         .addFields(
-          { name: 'Requested by', value: String(details.requestedBy || 'auto'), inline: true },
-          { name: 'Waiting in queue', value: String(details.remaining ?? '—'), inline: true },
+          { name: '👨‍🌾 Called by', value: String(details.requestedBy || 'auto schedule'), inline: true },
+          { name: '📦 Still in field', value: String(details.remaining ?? '—'), inline: true },
         );
       if (details.runUrl) embed.setURL(String(details.runUrl));
     } else if (event.action === 'batch.completed') {
       embed = new EmbedBuilder()
         .setColor(COLORS.green)
-        .setTitle(`Batch #${details.batchId ?? '?'} finished`)
+        .setTitle(`🌾 Harvest #${details.batchId ?? '?'} — Brought in!`)
         .setDescription(
-          `${details.downloaded ?? details.trackCount ?? 0} track(s) downloaded into the Aura library.`,
+          `**${details.downloaded ?? details.trackCount ?? 0} crops** stored in the Aura barn.`,
         );
       if (details.runUrl) embed.setURL(String(details.runUrl));
     } else if (event.action === 'batch.failed') {
       embed = new EmbedBuilder()
         .setColor(COLORS.red)
-        .setTitle(`Batch #${details.batchId ?? '?'} failed`)
-        .setDescription(String(details.error || 'The upload workflow failed.').slice(0, 1900));
+        .setTitle(`🌧️ Harvest #${details.batchId ?? '?'} — Storm damage!`)
+        .setDescription(String(details.error || 'The combine broke down.').slice(0, 1900));
       if (details.runUrl) embed.setURL(String(details.runUrl));
     }
     if (!embed) return;
@@ -428,26 +486,34 @@ export class AuraBot {
 
     try {
       const response = await this.api.submit(payload);
-      await this.react(message, resultEmoji(response.results));
+      const emoji = resultEmoji(response.results);
+      await this.react(message, emoji);
       this.cfg.queueCount = response.queueCount;
       void this.updatePresence();
       const queued = response.results.filter((result) => result.status === 'queued').length;
       if (queued === 0 && response.message) {
         await this.reply(message, response.message);
       } else if (response.queueCount >= response.threshold && queued > 0) {
-        await this.reply(
-          message,
-          `Queued **${queued}** · **${response.queueCount}/${response.threshold}** — dispatch starts automatically.`,
-        );
+        const msg = FARM_MESSAGES.thresholdHit[Math.floor(Math.random() * FARM_MESSAGES.thresholdHit.length)]
+          .replace('{queued}', String(queued))
+          .replace('{count}', String(response.queueCount))
+          .replace('{threshold}', String(response.threshold));
+        await this.reply(message, msg);
+      } else if (queued > 0) {
+        const msg = FARM_MESSAGES.queuedSimple[Math.floor(Math.random() * FARM_MESSAGES.queuedSimple.length)]
+          .replace('{queued}', String(queued))
+          .replace('{count}', String(response.queueCount))
+          .replace('{threshold}', String(response.threshold));
+        await this.reply(message, msg);
       }
     } catch (error) {
       if (error instanceof WorkerApiError && error.status === 0) {
         await this.outbox.add(payload);
-        await this.react(message, REACTIONS.offline);
+        await this.react(message, FARM_REACTIONS.offline);
         log.warn('worker unreachable — submission held in outbox');
         return;
       }
-      await this.react(message, REACTIONS.invalid);
+      await this.react(message, FARM_REACTIONS.invalid);
       log.error('submission failed', (error as Error).message);
     }
   }
@@ -455,24 +521,24 @@ export class AuraBot {
   private async submitPlaylistMessage(message: Message, url: string): Promise<void> {
     if (!message.channel || !isTextChannel(message.channel)) return;
     if (!this.cfg.playlistExpand) {
-      await this.reply(message, 'Playlist expansion is disabled right now — paste individual tracks instead.');
+      await this.reply(message, "🚜 The combine's in the barn — playlist expansion disabled. Drop single links instead.");
       return;
     }
     if (!isPlaylistUrl(url)) {
-      await this.react(message, REACTIONS.invalid);
+      await this.react(message, FARM_REACTIONS.invalid);
       return;
     }
-    await this.react(message, '⏳');
+    await this.react(message, FARM_REACTIONS.search);
     let expanded: ExpandResult;
     try {
       expanded = await this.api.expand(url);
     } catch (error) {
-      await this.react(message, REACTIONS.invalid);
-      await this.reply(message, `Could not expand that playlist: ${(error as Error).message}`);
+      await this.react(message, FARM_REACTIONS.invalid);
+      await this.reply(message, `🪨 Couldn't harvest that field: ${(error as Error).message}`);
       return;
     }
     if (!expanded.tracks.length) {
-      await this.reply(message, 'That playlist has no tracks I can queue.');
+      await this.reply(message, "🪨 That field's empty — no tracks to harvest.");
       return;
     }
     const tracks = expanded.tracks.slice(0, MAX_PLAYLIST_TRACKS);
@@ -520,8 +586,7 @@ export class AuraBot {
             user: {
               id: message.author.id,
               username: message.author.username,
-              displayName:
-                message.member?.displayName || message.author.globalName || message.author.username,
+              displayName: message.member?.displayName || message.author.globalName || message.author.username,
               avatarUrl: message.author.displayAvatarURL({ size: 128 }),
             },
             items: chunk.map((track) => ({
@@ -540,13 +605,16 @@ export class AuraBot {
 
     this.cfg.queueCount = lastCount;
     void this.updatePresence();
-    await this.react(message, queued ? REACTIONS.queued : REACTIONS.duplicate);
-    await this.reply(
-      message,
-      `**${expanded.title}** — queued **${queued}**${duplicates ? `, skipped ${duplicates} already queued` : ''}. Queue: **${lastCount}/${lastThreshold}**.`,
-    );
+    await this.react(message, queued ? FARM_REACTIONS.playlist : FARM_REACTIONS.duplicate);
+    const dupText = duplicates ? ` (🌿 ${duplicates} already growin')` : '';
+    const msg = FARM_MESSAGES.playlistQueued[0]
+      .replace('{title}', expanded.title)
+      .replace('{queued}', String(queued))
+      .replace('{duplicates}', dupText)
+      .replace('{count}', String(lastCount))
+      .replace('{threshold}', String(lastThreshold));
+    await this.reply(message, msg);
   }
-
   private async searchInChannel(message: Message, query: string): Promise<void> {
     if (!message.channel || !isTextChannel(message.channel)) return;
     try {
@@ -652,16 +720,18 @@ export class AuraBot {
     try {
       const { results } = await this.api.search(query);
       if (!results.length) {
-        await interaction.editReply(`No music found for **${query}**.`);
+        const msg = FARM_MESSAGES.searchEmpty.replace('{query}', query);
+        await interaction.editReply(msg);
         return;
       }
       const id = this.cacheSearch(results, interaction.user.id);
+      const msg = FARM_MESSAGES.searchPrompt.replace('{query}', query);
       await interaction.editReply({
-        content: `Results for **${query}** — choose up to 5 tracks to queue.`,
+        content: msg,
         components: [this.searchRow(id, results)],
       });
     } catch (error) {
-      await interaction.editReply(`Search failed: ${(error as Error).message}`);
+      await interaction.editReply(`🪨 Search failed: ${(error as Error).message}`);
     }
   }
 
@@ -670,21 +740,21 @@ export class AuraBot {
     const entry = this.searchCache.get(cacheId);
     if (!entry || Date.now() - entry.at > SEARCH_TTL_MS) {
       await interaction.reply({
-        content: 'That search expired — run `/find` again.',
+        content: '🌧️ That harvest\'s expired — run `/find` again.',
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     if (entry.userId !== interaction.user.id) {
       await interaction.reply({
-        content: 'That menu belongs to another user — run `/find` yourself.',
+        content: '🚜 That\'s another farmer\'s field — run `/find` yourself.',
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     const picked = entry.results.filter((result) => interaction.values.includes(result.videoId));
     if (!picked.length) {
-      await interaction.reply({ content: 'Those results expired — run `/find` again.', flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: '🌧️ Those seeds blew away — run `/find` again.', flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -716,18 +786,20 @@ export class AuraBot {
       const queued = response.results.filter((result) => result.status === 'queued').length;
       this.cfg.queueCount = response.queueCount;
       void this.updatePresence();
+      const dup = response.results.filter((r) => r.status === 'duplicate' || r.status === 'uploaded').length;
+      const dupText = dup ? ` (🌿 ${dup} already growin')` : '';
       await interaction.editReply({
-        content: `Queued **${queued}/${picked.length}** · queue **${response.queueCount}/${response.threshold}**${summarizeResults(response.results) ? ` (${summarizeResults(response.results)})` : ''}.`,
+        content: `🌱 **${queued}/${picked.length} planted** · silo **${response.queueCount}/${response.threshold}**${dupText}.`,
       });
     } catch (error) {
-      await interaction.editReply(`Could not queue that: ${(error as Error).message}`);
+      await interaction.editReply(`🪨 Couldn't plant that: ${(error as Error).message}`);
     }
   }
 
   private async onPlaylistCommand(interaction: ChatInputCommandInteraction): Promise<void> {
     if (!this.cfg.playlistExpand) {
       await interaction.reply({
-        content: 'Playlist expansion is disabled right now.',
+        content: "🚜 The combine's in the barn — playlist expansion disabled.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -736,7 +808,7 @@ export class AuraBot {
     const url = interaction.options.getString('url', true).trim();
     if (!isPlaylistUrl(url)) {
       await interaction.reply({
-        content: 'That is not a YouTube playlist link.',
+        content: "🪨 That's not a YouTube playlist field.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -746,11 +818,11 @@ export class AuraBot {
     try {
       expanded = await this.api.expand(url);
     } catch (error) {
-      await interaction.editReply(`Could not expand that playlist: ${(error as Error).message}`);
+      await interaction.editReply(`🪨 Couldn't harvest that field: ${(error as Error).message}`);
       return;
     }
     if (!expanded.tracks.length) {
-      await interaction.editReply('That playlist has no tracks I can queue.');
+      await interaction.editReply("🪨 That field's empty — no tracks to harvest.");
       return;
     }
     const tracks = expanded.tracks.slice(0, MAX_PLAYLIST_TRACKS);
@@ -787,13 +859,18 @@ export class AuraBot {
         count = response.queueCount;
         threshold = response.threshold;
       } catch (error) {
-        await interaction.editReply(`Playlist queueing stopped: ${(error as Error).message}`);
+        await interaction.editReply(`🪨 Harvest stopped: ${(error as Error).message}`);
         return;
       }
     }
-    await interaction.editReply(
-      `**${expanded.title}** — queued **${queued}**${duplicate ? `, skipped ${duplicate} already queued` : ''}. Queue: **${count}/${threshold}**.`,
-    );
+    const dupText = duplicate ? ` (🌿 ${duplicate} already growin')` : '';
+    const msg = FARM_MESSAGES.playlistQueued[0]
+      .replace('{title}', expanded.title)
+      .replace('{queued}', String(queued))
+      .replace('{duplicates}', dupText)
+      .replace('{count}', String(count))
+      .replace('{threshold}', String(threshold));
+    await interaction.editReply(msg);
   }
 
   private async onQueueCommand(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -802,20 +879,20 @@ export class AuraBot {
       const data = await this.api.queue(10);
       const embed = new EmbedBuilder()
         .setColor(COLORS.gold)
-        .setTitle('Aura Farmer queue')
-        .setDescription(`**${data.count}/${data.threshold}** tracks waiting for the next batch.`);
+        .setTitle('🌾 AURA FARMER — Silo Contents')
+        .setDescription(`**${data.count}/${data.threshold}** crops waiting for harvest.`);
       if (data.items.length) {
         const lines = data.items.map(
           (item, index) =>
-            `**${index + 1}.** ${item.title || item.videoId} — ${item.username}`,
+            `**${index + 1}.** ${item.title || item.videoId} — 👨‍🌾 ${item.username}`,
         );
-        embed.addFields({ name: 'Next up', value: lines.join('\n').slice(0, 1024) });
+        embed.addFields({ name: '🌱 Next up', value: lines.join('\n').slice(0, 1024) });
       } else {
-        embed.addFields({ name: 'Next up', value: 'Nothing queued yet — paste a YouTube link.' });
+        embed.addFields({ name: '🌱 Next up', value: 'Silo\'s empty — plant some YouTube links!' });
       }
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      await interaction.editReply(`Could not read the queue: ${(error as Error).message}`);
+      await interaction.editReply(`🪨 Couldn't check the silo: ${(error as Error).message}`);
     }
   }
 
@@ -825,43 +902,31 @@ export class AuraBot {
       const config = await this.api.config();
       const embed = new EmbedBuilder()
         .setColor(config.enabled && !config.maintenance ? COLORS.green : COLORS.dim)
-        .setTitle(`${config.botName} status`)
+        .setTitle(`🌾 ${config.botName} — Farm Report`)
         .addFields(
           {
-            name: 'State',
+            name: '🚜 State',
             value: config.maintenance
-              ? 'Maintenance'
+              ? '🛠️ Maintenance (scarecrow on break)'
               : config.enabled
-                ? 'Online'
-                : 'Disabled by an admin',
+                ? '☀️ Farming'
+                : '🌧️ Disabled by the landowner',
             inline: true,
           },
-          { name: 'Queue', value: `${config.queueCount}/${config.threshold}`, inline: true },
-          { name: 'Latency', value: `${Math.max(0, Math.round(this.client.ws.ping))} ms`, inline: true },
-          { name: 'Gateway', value: `v${APP_VERSION}`, inline: true },
+          { name: '📦 Silo', value: `${config.queueCount}/${config.threshold}`, inline: true },
+          { name: '📡 Ping', value: `${Math.max(0, Math.round(this.client.ws.ping))} ms`, inline: true },
+          { name: '🔧 Gear', value: `v${APP_VERSION}`, inline: true },
         );
       if (config.maintenance) embed.setFooter({ text: config.maintenanceMessage });
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      await interaction.editReply(`Could not read status: ${(error as Error).message}`);
+      await interaction.editReply(`🪨 Couldn't read the farm report: ${(error as Error).message}`);
     }
   }
 
   private async onHelpCommand(interaction: ChatInputCommandInteraction): Promise<void> {
-    const embed = new EmbedBuilder()
-      .setColor(COLORS.gold)
-      .setTitle('Aura Farmer')
-      .setDescription(
-        'Paste a YouTube or YouTube Music link in the submission channel and it joins the next download batch.',
-      )
-      .addFields(
-        { name: '/find query', value: 'Search YouTube Music and queue a track.' },
-        { name: '/playlist url', value: 'Queue a whole playlist (up to 100 tracks).' },
-        { name: '/queue', value: 'See what is waiting for the next batch.' },
-        { name: '/status', value: 'Check whether the bot is online.' },
-      )
-      .setFooter({ text: `Threshold: ${this.cfg.threshold} tracks · batches up to 25` });
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    const helpText = FARM_MESSAGES.help.replace('{threshold}', String(this.cfg.threshold));
+    await interaction.reply({ content: helpText, flags: MessageFlags.Ephemeral });
   }
 
   private async react(message: Message, emoji: string): Promise<void> {
