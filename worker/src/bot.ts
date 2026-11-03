@@ -8,7 +8,7 @@ import type {
 } from '../../src/shared/types';
 import { channelList, settingsToConfig } from '../../src/shared/settings';
 import { canonicalVideoUrl, isPlaylistUrl, playlistIdFromUrl, videoIdFromUrl } from '../../src/shared/urls';
-import { auraExpand, auraSearch } from './aura';
+import { auraExpand, auraSearch, auraLibraryVideoIds } from './aura';
 import { audit, bumpUser, loadSettings, queueCount, upsertUser } from './db';
 import { dispatchQueued } from './dispatch';
 import { error, json, readJson, str } from './http';
@@ -142,12 +142,30 @@ export async function handleSubmit(env: Env, request: Request, ctx: ExecutionCon
   if (!normalized.length) return error('no valid YouTube links', 400);
   await hydrateItems(normalized);
 
+  const libraryVideoIds = await auraLibraryVideoIds(env);
+
   const results: SubmitItemResult[] = [];
   let queued = 0;
   let duplicates = 0;
   let rejected = 0;
 
   for (const item of normalized) {
+    if (libraryVideoIds.has(item.videoId)) {
+      duplicates++;
+      await bumpUser(env, String(user.id), 'duplicates');
+      await audit(env, {
+        actorType: 'discord',
+        actorId: String(user.id),
+        actorName: String(user.username),
+        action: 'submission.duplicate',
+        targetType: 'video',
+        targetId: item.videoId,
+        details: { url: item.url, title: item.title || null, channelId: body.channelId, reason: 'already in library' },
+      });
+      results.push({ url: item.url, videoId: item.videoId, status: 'duplicate', title: item.title, detail: 'already in Aura library' });
+      continue;
+    }
+
     const existing = await env.DB.prepare(
       `SELECT 1 FROM submissions WHERE video_id = ? AND status IN ${ACTIVE_STATUSES} LIMIT 1`,
     )

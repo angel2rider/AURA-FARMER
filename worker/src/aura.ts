@@ -104,6 +104,15 @@ export async function auraRunJobs(env: Env, runId: number): Promise<any[]> {
   return data.jobs || [];
 }
 
+export async function auraLibraryVideoIds(env: Env): Promise<Set<string>> {
+  try {
+    const data = await auraPost<{ videoIds: string[] }>(env, { action: 'library' }, 10_000);
+    return new Set(data.videoIds || []);
+  } catch {
+    return new Set();
+  }
+}
+
 export function auraRunUrl(runId: number): string {
   return `https://github.com/abhinavthewc-quick/aura-music/actions/runs/${runId}`;
 }
