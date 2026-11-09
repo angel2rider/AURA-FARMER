@@ -108,7 +108,7 @@ Settings are polled by the gateway every 30 seconds.
 | --- | --- | --- |
 | Gateway | `BOT_INGEST_TOKEN` | `/v1/bot/*` (submit, config, search, expand, queue preview, heartbeat, events) |
 | Aura Pages `/api/bot` | `BOT_ADMIN_TOKEN` | `/v1/admin` (full bot admin RPC) |
-| Worker → Aura `/api/admin` | `AURA_SERVICE_TOKEN` | `search`, `expand`, `dispatch`, `runs`, `runJobs` only |
+| Worker → Aura `/api/admin` | `AURA_SERVICE_TOKEN` | `search`, `expand`, `dispatch`, `runs`, `runJobs`, `libraryIds` only |
 
 - The bot service token cannot read the library, secrets, or any other admin
   action, and it is not a Google/session credential.

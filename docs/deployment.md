@@ -102,7 +102,7 @@ curl -s -X POST https://aura-music-01g.pages.dev/api/admin \
 # {"ok":true,"email":"aura-farmer@service"}
 ```
 
-Any action outside `search`, `expand`, `dispatch`, `runs`, `runJobs` returns
+Any action outside `search`, `expand`, `dispatch`, `runs`, `runJobs`, `libraryIds` returns
 `403` for the service token.
 
 ## 3. Gateway on the VPS

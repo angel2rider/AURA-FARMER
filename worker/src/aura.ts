@@ -106,7 +106,7 @@ export async function auraRunJobs(env: Env, runId: number): Promise<any[]> {
 
 export async function auraLibraryVideoIds(env: Env): Promise<Set<string>> {
   try {
-    const data = await auraPost<{ videoIds: string[] }>(env, { action: 'library' }, 10_000);
+    const data = await auraPost<{ videoIds: string[] }>(env, { action: 'libraryIds' }, 10_000);
     return new Set(data.videoIds || []);
   } catch {
     return new Set();
